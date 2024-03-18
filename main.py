@@ -36,8 +36,6 @@ def parse_data(data):
 def send_user_details(chat_id, user):
     user_details = f"New user started ChatBot:\n\nUsername: @{user.username}\nFirst Name: {user.first_name}\nLast Name: {user.last_name}\nUser ID: {user.id}"
     bot.send_message(chat_id, user_details)
-    
-user_states = {}
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -52,12 +50,74 @@ def start(message):
 @bot.callback_query_handler(func=lambda call: call.data == "start_quiz")
 def start_quiz(call):
     chat_id = call.message.chat.id
-    if chat_id in user_states and user_states[chat_id] == 'creating_quiz':
-        bot.send_message(chat_id, "لقد ضغطت بالفعل علي هذا الزر، فقط قم بأكمال الخطوات🥰")
+    markup = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+    markup.add("نص في رسالة📝", "ملف PDF📂")
+    bot.send_message(chat_id, "كيف ترغب في إرسال المحاضرة؟🤔", reply_markup=markup)
+
+@bot.message_handler(func=lambda message: message.text == "نص في رسالة📝")
+def send_lecture_as_text(message):
+    chat_id = message.chat.id
+    bot.send_message(chat_id, "برجاء ارسال موضوع المحاضرة في رسالة🤖")
+    bot.register_next_step_handler(message, get_topic)
+
+@bot.message_handler(func=lambda message: message.text == "ملف PDF📂")
+def send_lecture_as_pdf(message):
+    chat_id = message.chat.id
+    bot.send_message(chat_id, "برجاء ارسال ملف PDF")
+    bot.register_next_step_handler(message, get_topic_from_pdf)
+
+def get_topic_from_pdf(message):
+    if message.document:
+        file_info = bot.get_file(message.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+
+        # Open the PDF using pdfplumber
+        with pdfplumber.open(BytesIO(downloaded_file)) as pdf:
+            page_count = len(pdf.pages)
+
+            # Ask the user which pages they want to extract text from
+            bot.reply_to(message, f"الملف PDF يحتوي على {page_count} صفحة. يرجى تقديم أرقام الصفحات أو النطاقات (على سبيل المثال، 13-17)😊")
+
+            # Register the next step handler to get the selected pages
+            bot.register_next_step_handler(message, lambda msg: extract_text_from_pages(msg, pdf))
     else:
-        user_states[chat_id] = 'creating_quiz'
-        bot.send_message(chat_id, "برجاء ارسال موضوع المحاضرة في رسالة🤖")
-        bot.register_next_step_handler(call.message, get_topic)
+        # If the message does not contain a document, inform the user to upload a PDF file
+        bot.reply_to(message, "الرجاء إرسال ملف PDF.")
+        bot.register_next_step_handler(message, get_topic_from_pdf)
+def extract_text_from_pages(message, pdf):
+    selected_pages = message.text.strip().split(',')
+    extracted_text = ''
+    invalid_input = False
+
+    for page_range in selected_pages:
+        if '-' in page_range:
+            start, end = map(int, page_range.split('-'))
+            if 1 <= start <= end <= len(pdf.pages):
+                for i in range(start, end + 1):
+                    extracted_text += pdf.pages[i - 1].extract_text()
+            else:
+                # Handle the case where the specified page range is invalid
+                bot.send_message(message.chat.id, f"النطاق {page_range} غير صالح. يرجى تقديم نطاق صحيح.")
+                invalid_input = True
+                break
+        else:
+            page_num = int(page_range)
+            if 1 <= page_num <= len(pdf.pages):
+                extracted_text += pdf.pages[page_num - 1].extract_text()
+            else:
+                # Handle the case where the specified page number is invalid
+                bot.send_message(message.chat.id, f"الصفحة {page_num} غير موجودة في الملف. يرجى تقديم صفحة صالحة.")
+                invalid_input = True
+                break
+
+    if not invalid_input:
+        # Proceed with the rest of the process (e.g., ask for the number of questions)
+        bot.send_message(message.chat.id, "ارسل/ي عدد الاسئلة المطلوبة😊")
+        bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, extracted_text))
+    else:
+        # Ask the user to resend valid pages or ranges
+        bot.reply_to(message, "يرجى إعادة إرسال الصفحات أو النطاقات الصالحة.")
+        bot.register_next_step_handler(message, lambda msg: extract_text_from_pages(msg, pdf))
 
 def get_topic(message):
     topic = message.text
@@ -90,7 +150,7 @@ def get_num_questions(message, topic):
             bot.send_message(message.chat.id, "لا يمكنك ادخال عدد بالسالب😒")
             get_topic(message)
     except (TypeError, ValueError):
-        bot.send_message(message.chat.id, "برجاء اختيار رقم صحيح")
+        bot.send_message(message.chat.id, "برجاء اختيار رقم صحيح X﹏X")
         get_topic(message)
         
 def create_grade_level_keyboard():
