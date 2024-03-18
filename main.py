@@ -9,7 +9,7 @@ GRADE_LEVEL_MAP = {
     "متوسط🙄": "university",
     "سهل🤙": "9th grade"
 }
-bot = telebot.TeleBot("5843855929:AAHlIUnglQ0Gv2uwFZ4YA5ZEufEbUqzOHp0")
+bot = telebot.TeleBot("6982141096:AAFpEspslCkO0KWNbONnmWjUU_87jib__g8")
 def parse_data(data):
     organized_data = {}
 
