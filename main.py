@@ -54,7 +54,7 @@ def start_quiz(call):
     markup.add("نص في رسالة📝", "ملف PDF📂")
     bot.send_message(chat_id, "كيف ترغب في إرسال المحاضرة؟🤔", reply_markup=markup)
 
-@bot.message_handler(func=lambda message: message.text == "نص في رسالة📝")
+@bot.message_handler(func=lambda message: message.text == "رساله نصية📝")
 def send_lecture_as_text(message):
     chat_id = message.chat.id
     bot.send_message(chat_id, "برجاء ارسال موضوع المحاضرة في رسالة🤖")
@@ -63,28 +63,35 @@ def send_lecture_as_text(message):
 @bot.message_handler(func=lambda message: message.text == "ملف PDF📂")
 def send_lecture_as_pdf(message):
     chat_id = message.chat.id
-    bot.send_message(chat_id, "برجاء ارسال ملف PDF")
+    bot.send_message(chat_id, "برجاء ارسال ملف PDF😊")
     bot.register_next_step_handler(message, get_topic_from_pdf)
 
 def get_topic_from_pdf(message):
     if message.document:
-        file_info = bot.get_file(message.document.file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
+        # Check if the provided file is a PDF
+        if message.document.mime_type == 'application/pdf':
+            file_info = bot.get_file(message.document.file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
 
-        # Open the PDF using pdfplumber
-        with pdfplumber.open(BytesIO(downloaded_file)) as pdf:
-            page_count = len(pdf.pages)
+            # Open the PDF using pdfplumber
+            with pdfplumber.open(BytesIO(downloaded_file)) as pdf:
+                page_count = len(pdf.pages)
 
-            # Ask the user which pages they want to extract text from
-            bot.reply_to(message, f"الملف PDF يحتوي على {page_count} صفحة. يرجى تقديم أرقام الصفحات أو النطاقات (على سبيل المثال، 13-17)😊")
+                # Ask the user which pages they want to extract text from
+                bot.reply_to(message, f"الملف يحتوي على {page_count} صفحة. يرجى تقديم أرقام الصفحات أو النطاقات (على سبيل المثال، 13-17)😊")
 
-            # Register the next step handler to get the selected pages
-            bot.register_next_step_handler(message, lambda msg: extract_text_from_pages(msg, pdf))
+                # Register the next step handler to get the selected pages
+                bot.register_next_step_handler(message, lambda msg: extract_text_from_pages(msg, pdf))
+        else:
+            # Inform the user that the provided file is not a PDF
+            bot.reply_to(message, "الملف الذي قمت بإرساله ليس من نوع PDF. برجاء إرسال ملف PDF.")
+            bot.register_next_step_handler(message, get_topic_from_pdf)
     else:
         # If the message does not contain a document, inform the user to upload a PDF file
         bot.reply_to(message, "الرجاء إرسال ملف PDF.")
         bot.register_next_step_handler(message, get_topic_from_pdf)
 def extract_text_from_pages(message, pdf):
+    initial_reply = bot.reply_to(message,'جاري استخراج البيانات برجاء الانتظار⌛')
     selected_pages = message.text.strip().split(',')
     extracted_text = ''
     invalid_input = False
@@ -111,10 +118,12 @@ def extract_text_from_pages(message, pdf):
                 break
 
     if not invalid_input:
+        bot.delete_message(message.chat.id, initial_reply.message_id)
         # Proceed with the rest of the process (e.g., ask for the number of questions)
         bot.send_message(message.chat.id, "ارسل/ي عدد الاسئلة المطلوبة😊")
         bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, extracted_text))
     else:
+        bot.delete_message(message.chat.id, initial_reply.message_id)
         # Ask the user to resend valid pages or ranges
         bot.reply_to(message, "يرجى إعادة إرسال الصفحات أو النطاقات الصالحة.")
         bot.register_next_step_handler(message, lambda msg: extract_text_from_pages(msg, pdf))
@@ -139,18 +148,18 @@ def get_num_questions(message, topic):
         unicode_text = arabic_to_unicode(message.text)
         num_questions = int(unicode_text)
         if num_questions > 0:
-            if num_questions >= 3:
+            if 3 <= num_questions <= 20:  # Limiting the number of questions from 3 to 20
                 bot.send_message(message.chat.id, "اختر مستوي الصعوبه😌", reply_markup=create_grade_level_keyboard())
                 # Register the next step handler to get the grade level choice
                 bot.register_next_step_handler(message, lambda msg: get_grade_level(msg, topic, num_questions))
             else:
-                bot.send_message(message.chat.id, "الحد الادني هو 3😢")
+                bot.send_message(message.chat.id, "عدد الأسئلة يجب أن يكون بين 3 و 20 😢")
                 get_topic(message)
         else:
-            bot.send_message(message.chat.id, "لا يمكنك ادخال عدد بالسالب😒")
+            bot.send_message(message.chat.id, "عدد الأسئلة يجب أن يكون أكبر من 0 😒")
             get_topic(message)
     except (TypeError, ValueError):
-        bot.send_message(message.chat.id, "برجاء اختيار رقم صحيح X﹏X")
+        bot.send_message(message.chat.id, "برجاء اختيار رقم صحيح 🫣")
         get_topic(message)
         
 def create_grade_level_keyboard():
@@ -255,7 +264,11 @@ def send_quiz(message, topic, num_questions, grade_level):
     send_user_details(854578633, message.from_user)
 @bot.message_handler(func=lambda message: True)
 def handle_other_messages(message):
-    start(message)
+    if message.text == "/start":
+        start(message)
+    else:
+        # Handle other messages by starting the conversation again
+        start(message)
 
 if __name__ == "__main__":
     while True:
