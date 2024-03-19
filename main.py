@@ -271,9 +271,9 @@ def handle_other_messages(message):
         start(message)
 
 if __name__ == "__main__":
+    keep_alive()
     while True:
         try:
-            keep_alive()
             bot.polling()
         except:
             pass
