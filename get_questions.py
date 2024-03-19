@@ -37,7 +37,8 @@ def get_questions(grade_level, num_questions,topic):
         'number': str(num_questions),
         'diff': str(grade_level),
     }
-
+    response = requests.post('https://mcqgenerator.com/wp-admin/admin-ajax.php', cookies=cookies, headers=headers, data=data, timeout=1200)
+    return response.json()
     # s = requests.Session()
     # headers = {
     #     'authority': 'auth.magicschool.ai',
@@ -95,5 +96,4 @@ def get_questions(grade_level, num_questions,topic):
     # }
 
     # response = s.post('https://app.magicschool.ai/api/generations',headers=headers, json=json_data)
-    response = requests.post('https://mcqgenerator.com/wp-admin/admin-ajax.php', cookies=cookies, headers=headers, data=data)
-    return response.json()
+    
