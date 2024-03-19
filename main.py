@@ -1,42 +1,60 @@
-import requests
-import re
 import telebot
 from keep_alive import keep_alive
 import pdfplumber
 from io import BytesIO
+from get_questions import get_questions
+
 GRADE_LEVEL_MAP = {
-    "صعب😬": "year-13",
-    "متوسط🙄": "university",
-    "سهل🤙": "9th grade"
+    "صعب😬": "hard",
+    "متوسط🙄": "medium",
+    "سهل🤙": "easy"
 }
 bot = telebot.TeleBot("6982141096:AAFpEspslCkO0KWNbONnmWjUU_87jib__g8")
-def parse_data(data):
-    organized_data = {}
 
-    # Extracting questions and correct answers using regular expressions
-    questions = re.findall(r"### (\d+)\. (.+?)(?=\n[a-d]\.|\n\n)", data, re.DOTALL)
-    correct_answers = re.findall(r"\d+\.\s([a-d])", data)
-
-    # Extracting options for each question separately
-    options_pattern = r"([a-d])\. (.+?)(?=\n[a-d]\.|\n\n)"
-    options_matches = re.findall(options_pattern, data, re.DOTALL)
-
-    # Creating the dictionary
-    for i, (question_number, question_text) in enumerate(questions):
-        question_data = {}
-        question_data["question"] = question_text.strip()
-        question_data["answers"] = [match[1].strip() for match in options_matches[i * 4: (i + 1) * 4]]
-        # Get index of correct answer in the list of answers
-        correct_answer_index = ord(correct_answers[i]) - ord('a')
-        question_data["correct_answer"] = correct_answer_index
-        organized_data[f"Question {question_number}"] = question_data
-
-    return organized_data
 
 def send_user_details(chat_id, user):
     user_details = f"New user started ChatBot:\n\nUsername: @{user.username}\nFirst Name: {user.first_name}\nLast Name: {user.last_name}\nUser ID: {user.id}"
     bot.send_message(chat_id, user_details)
+    
+@bot.message_handler(commands=['feedback'])
+def handle_feedback(message):
+    feedback_prompt = "شكرًا لاستخدام البوت! 😊\n" \
+                      "هل ترغب في مشاركة أفكارك أو ملاحظاتك لتحسين البوت؟ يرجى كتابة رسالتك هنا، فسأكون سعيدًا بسماع ما لديك!"
+    bot.send_message(message.chat.id, feedback_prompt)
+    # Register the next step handler to wait for the user's feedback
+    bot.register_next_step_handler(message, handle_single_feedback)
 
+def handle_single_feedback(message):
+    feedback_text = message.text
+    if feedback_text:
+        # Send the feedback to your chat
+        bot.send_message(854578633, f"New feedback from @{message.from_user.username}:\n{feedback_text}")
+        bot.reply_to(message, "شكرا لك على ملاحظاتك! تم إرسالها بنجاح لتقديمها والعمل عليها.")
+    else:
+        bot.reply_to(message, "يرجى كتابة رسالة للملاحظات.")
+        
+@bot.message_handler(commands=['help'])
+def handle_help(message):
+    markup = telebot.types.InlineKeyboardMarkup()
+    markup.add(telebot.types.InlineKeyboardButton("تواصل📞", url="https://t.me/RefOoSami"))
+    help_text = """
+    مرحبًا بك في مركز المساعدة ! 🤖📚
+
+    إليك الأوامر المتاحة:
+    /start - بدء البوت
+    /feedback - تقديم ملاحظاتك أو الإبلاغ عن مشاكل
+    /help - عرض هذه الرسالة للمساعدة
+
+    لإنشاء اختبار، اتبع الخطوات التالية:
+    1. أرسل محتوى المحاضرة كنص أو ملف PDF.
+    2. اختر عدد الأسئلة التي تريد تضمينها (بين 3 و 20).
+    3. حدد مستوى الصعوبة (سهل، متوسط، أو صعب).
+    4. انتظر حتى يقوم البوت بإنشاء أسئلة الاختبار استنادًا إلى ما قمت بتحديده.
+
+    إذا كان لديك أي استفسارات أو تحتاج إلى مساعدة، فلا تتردد في التواصل! 😊
+    """
+    bot.reply_to(message, help_text, reply_markup=markup)
+    
 @bot.message_handler(commands=['start'])
 def start(message):
     markup = telebot.types.InlineKeyboardMarkup()
@@ -46,7 +64,6 @@ def start(message):
     bot.send_message(message.chat.id, "اهلا بيك\ي👋😍\nاضغط/ي علي 'انشاء اختبار' للبدء😋", reply_markup=markup)
     send_user_details(854578633, message.from_user)
     
-
 @bot.callback_query_handler(func=lambda call: call.data == "start_quiz")
 def start_quiz(call):
     chat_id = call.message.chat.id
@@ -54,17 +71,37 @@ def start_quiz(call):
     markup.add("نص في رسالة📝", "ملف PDF📂")
     bot.send_message(chat_id, "كيف ترغب في إرسال المحاضرة؟🤔", reply_markup=markup)
 
-@bot.message_handler(func=lambda message: message.text == "رساله نصية📝")
+@bot.message_handler(func=lambda message: message.text == "نص في رسالة📝")
 def send_lecture_as_text(message):
     chat_id = message.chat.id
-    bot.send_message(chat_id, "برجاء ارسال موضوع المحاضرة في رسالة🤖")
+    bot.send_message(chat_id, "برجاء ارسال موضوع المحاضرة في رسالة📝")
     bot.register_next_step_handler(message, get_topic)
 
 @bot.message_handler(func=lambda message: message.text == "ملف PDF📂")
 def send_lecture_as_pdf(message):
     chat_id = message.chat.id
-    bot.send_message(chat_id, "برجاء ارسال ملف PDF😊")
+    bot.send_message(chat_id, "برجاء ارسال ملف PDF📂")
     bot.register_next_step_handler(message, get_topic_from_pdf)
+
+def get_topic(message):
+    topic = message.text
+    bot.send_message(message.chat.id, "كم سؤال تريد انشاءه (اختر رقم بين 3 و 20)❓")
+    bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, topic))
+
+def get_num_questions(message, topic):
+    try:
+        unicode_text = arabic_to_unicode(message.text)
+        num_questions = int(unicode_text)
+        if num_questions != 0:  # Limiting the number of questions from 3 to 20
+            bot.send_message(message.chat.id, "اختر مستوي الصعوبه😌", reply_markup=create_grade_level_keyboard())
+            # Register the next step handler to get the grade level choice
+            bot.register_next_step_handler(message, lambda msg: get_grade_level(msg, topic, num_questions))
+        else:
+            bot.send_message(message.chat.id, "عدد الأسئلة يجب أن يكون اكبر من صفر 😢")
+            bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, topic))
+    except (TypeError, ValueError):
+        bot.send_message(message.chat.id, "برجاء اختيار رقم صحيح 🫣")
+        bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, topic))
 
 def get_topic_from_pdf(message):
     if message.document:
@@ -90,6 +127,7 @@ def get_topic_from_pdf(message):
         # If the message does not contain a document, inform the user to upload a PDF file
         bot.reply_to(message, "الرجاء إرسال ملف PDF.")
         bot.register_next_step_handler(message, get_topic_from_pdf)
+        
 def extract_text_from_pages(message, pdf):
     initial_reply = bot.reply_to(message,'جاري استخراج البيانات برجاء الانتظار⌛')
     selected_pages = message.text.strip().split(',')
@@ -128,11 +166,6 @@ def extract_text_from_pages(message, pdf):
         bot.reply_to(message, "يرجى إعادة إرسال الصفحات أو النطاقات الصالحة.")
         bot.register_next_step_handler(message, lambda msg: extract_text_from_pages(msg, pdf))
 
-def get_topic(message):
-    topic = message.text
-    bot.send_message(message.chat.id, "ارسل/ي عدد الاسئلة المطلوبة😊")
-    bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, topic))
-
 def arabic_to_unicode(text):
     unicode_text = ""
     for char in text:
@@ -143,25 +176,6 @@ def arabic_to_unicode(text):
             unicode_text += char
     return unicode_text
 
-def get_num_questions(message, topic):
-    try:
-        unicode_text = arabic_to_unicode(message.text)
-        num_questions = int(unicode_text)
-        if num_questions > 0:
-            if 3 <= num_questions <= 20:  # Limiting the number of questions from 3 to 20
-                bot.send_message(message.chat.id, "اختر مستوي الصعوبه😌", reply_markup=create_grade_level_keyboard())
-                # Register the next step handler to get the grade level choice
-                bot.register_next_step_handler(message, lambda msg: get_grade_level(msg, topic, num_questions))
-            else:
-                bot.send_message(message.chat.id, "عدد الأسئلة يجب أن يكون بين 3 و 20 😢")
-                get_topic(message)
-        else:
-            bot.send_message(message.chat.id, "عدد الأسئلة يجب أن يكون أكبر من 0 😒")
-            get_topic(message)
-    except (TypeError, ValueError):
-        bot.send_message(message.chat.id, "برجاء اختيار رقم صحيح 🫣")
-        get_topic(message)
-        
 def create_grade_level_keyboard():
     markup = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
     markup.add("صعب😬", "متوسط🙄", "سهل🤙")
@@ -178,88 +192,34 @@ def get_grade_level(message, topic, num_questions):
     
 def send_quiz(message, topic, num_questions, grade_level):
     # Send the wait message and GIF
-    wait_message = bot.send_message(message.chat.id, "برجاء الانتظار...\nجاري معالجة البيانات🫣")
+    wait_message = bot.send_message(message.chat.id, "برجاء الانتظار قد يستغرق الامر مدة تصل الي دقيقة...\nجاري انشاء الاسئلة🫣")
     # Make the request to fetch the questions and answers
-    s = requests.Session()
-    headers = {
-        'authority': 'auth.magicschool.ai',
-        'accept': '*/*',
-        'accept-language': 'ar-EG,ar;q=0.9,en-US;q=0.8,en;q=0.7',
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRudXB6eGZqcnVrc3VsdmZ5YW5sIiwicm9sZSI6ImFub24iLCJpYXQiOjE2ODIwNTIzNzIsImV4cCI6MTk5NzYyODM3Mn0.NxmabzXOOYo4zMqwJpEtNDewILVImuIxWZSPIuRaE2o',
-        'content-type': 'application/json;charset=UTF-8',
-        'origin': 'https://app.magicschool.ai',
-        'referer': 'https://app.magicschool.ai/',
-        'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-site',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'x-client-info': 'supabase-js-web/2.38.4',
-    }
-
-    params = {
-        'grant_type': 'password',
-    }
-
-    json_data = {
-        'email': 'raafatsami101@gmail.com',
-        'password': 'Ref@osami826491375',
-        'gotrue_meta_security': {},
-    }
-
-    response = s.post('https://auth.magicschool.ai/auth/v1/token', params=params, headers=headers, json=json_data)
-    headers = {
-        'authority': 'app.magicschool.ai',
-        'accept': '*/*',
-        'accept-language': 'ar-EG,ar;q=0.9,en-US;q=0.8,en;q=0.7',
-        'authorization': 'Bearer ' + response.cookies['sb-access-token'],
-        'content-type': 'application/json',
-        'origin': 'https://app.magicschool.ai',
-        'referer': 'https://app.magicschool.ai/tools/mc-assessment',
-        'sec-ch-ua': '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    }
-
-    json_data = {
-        'id': 'mc-assessment',
-        'gradeLevel': str(grade_level),
-        'numQuestions': str(num_questions),
-        'topic': topic,
-        'locale': 'en-us',
-        'role': 'teacher',
-    }
-
-    response = s.post('https://app.magicschool.ai/api/generations',headers=headers, json=json_data)
-    data = response.text
-    parsed_data = parse_data(data)
-    
+    parsed_data = get_questions(grade_level,num_questions,topic)
+    # parsed_data = parse_data(data)
     bot.delete_message(message.chat.id, wait_message.message_id)
-
     # Send each question as a poll
     for question_number, question_data in parsed_data.items():
-        # Prepare the poll options
-        options = [f"{chr(97 + i)}. {option}" for i, option in enumerate(question_data["answers"])]
-        # Check the length of options before sending the poll
-        if any(len(option) > 100 for option in options):
+        question_text = question_data["text"]
+        options = question_data["options"]
+        correct_answer = question_data["answer"]
+        
+        # Prepare poll options
+        options_list = [f"{key}. {value}" for key, value in options.items()]
+        
+        # Check if options are too long
+        if any(len(option) > 100 for option in options_list):
             # Skip invalid poll
             continue
+        
         # Send the poll
         bot.send_poll(
             chat_id=message.chat.id,
-            question=question_data["question"],
-            options=options,
+            question=question_text,
+            options=options_list,
             is_anonymous=False,  # To show poll results to users
             type="quiz",  # Set poll type to quiz
-            correct_option_id=question_data["correct_answer"],  # Set the correct answer index
-            open_period=0,  # To disable the "open for" duration
-
+            correct_option_id=list(options.keys()).index(correct_answer),  # Set the correct answer index
+            open_period=0  # To disable the "open for" duration
         )
     send_user_details(854578633, message.from_user)
 @bot.message_handler(func=lambda message: True)
@@ -271,9 +231,9 @@ def handle_other_messages(message):
         start(message)
 
 if __name__ == "__main__":
-    keep_alive()
     while True:
         try:
+            keep_alive()
             bot.polling()
         except:
             pass
