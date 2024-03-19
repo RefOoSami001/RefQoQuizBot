@@ -11,7 +11,7 @@ GRADE_LEVEL_MAP = {
     "متوسط🙄": "medium",
     "سهل🤙": "easy"
 }
-bot = telebot.TeleBot("5843855929:AAHlIUnglQ0Gv2uwFZ4YA5ZEufEbUqzOHp0")
+bot = telebot.TeleBot("6982141096:AAFpEspslCkO0KWNbONnmWjUU_87jib__g8")
 
 @bot.message_handler(commands=['addpremium'])
 def add_premium_user(message):
