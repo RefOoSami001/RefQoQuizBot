@@ -3,13 +3,54 @@ from keep_alive import keep_alive
 import pdfplumber
 from io import BytesIO
 from get_questions import get_questions
-
+import sqlite3
+admin_ids = [854578633]
+premium_users = []
 GRADE_LEVEL_MAP = {
     "صعب😬": "hard",
     "متوسط🙄": "medium",
     "سهل🤙": "easy"
 }
-bot = telebot.TeleBot("6982141096:AAFpEspslCkO0KWNbONnmWjUU_87jib__g8")
+bot = telebot.TeleBot("5843855929:AAHlIUnglQ0Gv2uwFZ4YA5ZEufEbUqzOHp0")
+
+@bot.message_handler(commands=['addpremium'])
+def add_premium_user(message):
+    # Establish connection to SQLite database
+    conn = sqlite3.connect('premium_users.db')
+    c = conn.cursor()
+    
+    # Check if the user is an admin
+    if message.from_user.id not in admin_ids:
+        bot.reply_to(message, "غير مصرح لك بالدخول لهذا الامر، خاص بالادمن فقط!🚫")
+        conn.close()  # Close the connection
+        return
+    
+    # Extract the user ID from the message
+    try:
+        user_id = int(message.text.split()[1])
+    except IndexError:
+        bot.reply_to(message, "Please provide a user ID.")
+        conn.close()  # Close the connection
+        return
+    except ValueError:
+        bot.reply_to(message, "Invalid user ID.")
+        conn.close()  # Close the connection
+        return
+    
+    # Add the user to the premium list
+    if user_id not in premium_users:
+        premium_users.append(user_id)
+        
+        # Insert the user ID into the premium users table
+        c.execute("INSERT INTO premium_users (user_id) VALUES (?)", (user_id,))
+        conn.commit()
+        
+        bot.reply_to(message, f"User {user_id} has been added to the premium plan.")
+    else:
+        bot.reply_to(message, "User is already in the premium plan.")
+    
+    # Close the connection
+    conn.close()
 
 
 def send_user_details(chat_id, user):
@@ -44,6 +85,7 @@ def handle_help(message):
     /start - بدء البوت
     /feedback - تقديم ملاحظاتك أو الإبلاغ عن مشاكل
     /help - عرض هذه الرسالة للمساعدة
+    /addpremium - لاضافه مستخدمين للخطة المدفوعه (خاص بالادمن فقط)
 
     لإنشاء اختبار، اتبع الخطوات التالية:
     1. أرسل محتوى المحاضرة كنص أو ملف PDF.
@@ -88,20 +130,51 @@ def get_topic(message):
     bot.send_message(message.chat.id, "كم سؤال تريد انشاءه❓")
     bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, topic))
 
+# Modify the is_premium_user function to accept the user_id only
+def is_premium_user(user_id):
+    # Establish a new connection and cursor within the function
+    conn = sqlite3.connect('premium_users.db')
+    c = conn.cursor()
+
+    c.execute("SELECT user_id FROM premium_users WHERE user_id = ?", (user_id,))
+    result = c.fetchone()
+
+    # Close the connection before returning the result
+    conn.close()
+
+    return result is not None
+
+# Modify the get_num_questions function to use a separate connection and cursor
 def get_num_questions(message, topic):
     try:
+        user_id = message.from_user.id
         unicode_text = arabic_to_unicode(message.text)
         num_questions = int(unicode_text)
         if num_questions != 0:
-            bot.send_message(message.chat.id, "اختر مستوي الصعوبه😌", reply_markup=create_grade_level_keyboard())
-            # Register the next step handler to get the grade level choice
-            bot.register_next_step_handler(message, lambda msg: get_grade_level(msg, topic, num_questions))
+            # Establish a new connection and cursor within the function
+            conn = sqlite3.connect('premium_users.db')
+            c = conn.cursor()
+
+            if num_questions > 5 and not is_premium_user(user_id):
+                bot.send_message(message.chat.id, "عذرًا، يبدو أنك تخطيت الحد الاقصي لعدد الاسئلة في الخطة المجانيه وهي 5 اسئلة. يرجى التواصل مع الادمن لتفعيل الخدمة المميزة. يمكنك النقر على الزر التالي للتواصل. شكرًا لتفهمك! 👨‍💼",
+                 reply_markup=telebot.types.InlineKeyboardMarkup().add(
+                     telebot.types.InlineKeyboardButton("تواصل مع الادمن", url="https://t.me/RefOoSami")
+                 ))
+            else:
+                bot.send_message(message.chat.id, "اختر مستوي الصعوبه😌", reply_markup=create_grade_level_keyboard())
+                # Register the next step handler to get the grade level choice
+                bot.register_next_step_handler(message, lambda msg: get_grade_level(msg, topic, num_questions))
+
+            # Close the connection after using it
+            conn.close()
         else:
             bot.send_message(message.chat.id, "عدد الأسئلة يجب أن يكون اكبر من صفر 😢")
             bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, topic))
     except (TypeError, ValueError):
         bot.send_message(message.chat.id, "برجاء اختيار رقم صحيح 🫣")
         bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, topic))
+
+# Modify other functions as necessary to create separate connections and cursors
 
 def get_topic_from_pdf(message):
     if message.document:
@@ -192,7 +265,7 @@ def get_grade_level(message, topic, num_questions):
     
 def send_quiz(message, topic, num_questions, grade_level):
     # Send the wait message and GIF
-    wait_message = bot.send_message(message.chat.id, "برجاء الانتظار قد يستغرق الامر مدة تصل الي دقيقة...\nجاري انشاء الاسئلة🫣")
+    wait_message = bot.send_message(message.chat.id, "برجاء الانتظار قد يستغرق الامر مدة تصل الي 5 دقائق...\nجاري انشاء الاسئلة🫣")
     # Make the request to fetch the questions and answers
     parsed_data = get_questions(grade_level,num_questions,topic)
     # parsed_data = parse_data(data)
@@ -221,7 +294,7 @@ def send_quiz(message, topic, num_questions, grade_level):
             correct_option_id=list(options.keys()).index(correct_answer),  # Set the correct answer index
             open_period=0  # To disable the "open for" duration
         )
-    send_user_details(854578633, message.from_user)
+    # send_user_details(854578633, message.from_user)
 @bot.message_handler(func=lambda message: True)
 def handle_other_messages(message):
     if message.text == "/start":
