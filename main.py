@@ -47,7 +47,7 @@ def handle_help(message):
 
     لإنشاء اختبار، اتبع الخطوات التالية:
     1. أرسل محتوى المحاضرة كنص أو ملف PDF.
-    2. اختر عدد الأسئلة التي تريد تضمينها (بين 3 و 20).
+    2. اختر عدد الأسئلة التي تريد تضمينها.
     3. حدد مستوى الصعوبة (سهل، متوسط، أو صعب).
     4. انتظر حتى يقوم البوت بإنشاء أسئلة الاختبار استنادًا إلى ما قمت بتحديده.
 
@@ -62,7 +62,7 @@ def start(message):
     markup.add(telebot.types.InlineKeyboardButton("أنشاء اختبار🫣", callback_data="start_quiz"),
                 telebot.types.InlineKeyboardButton("تواصل📞", url="https://t.me/RefOoSami"))
     bot.send_message(message.chat.id, "اهلا بيك\ي👋😍\nاضغط/ي علي 'انشاء اختبار' للبدء😋", reply_markup=markup)
-    send_user_details(854578633, message.from_user)
+    # send_user_details(854578633, message.from_user)
     
 @bot.callback_query_handler(func=lambda call: call.data == "start_quiz")
 def start_quiz(call):
@@ -85,14 +85,14 @@ def send_lecture_as_pdf(message):
 
 def get_topic(message):
     topic = message.text
-    bot.send_message(message.chat.id, "كم سؤال تريد انشاءه (اختر رقم بين 3 و 20)❓")
+    bot.send_message(message.chat.id, "كم سؤال تريد انشاءه❓")
     bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, topic))
 
 def get_num_questions(message, topic):
     try:
         unicode_text = arabic_to_unicode(message.text)
         num_questions = int(unicode_text)
-        if num_questions != 0:  # Limiting the number of questions from 3 to 20
+        if num_questions != 0:
             bot.send_message(message.chat.id, "اختر مستوي الصعوبه😌", reply_markup=create_grade_level_keyboard())
             # Register the next step handler to get the grade level choice
             bot.register_next_step_handler(message, lambda msg: get_grade_level(msg, topic, num_questions))
@@ -158,7 +158,7 @@ def extract_text_from_pages(message, pdf):
     if not invalid_input:
         bot.delete_message(message.chat.id, initial_reply.message_id)
         # Proceed with the rest of the process (e.g., ask for the number of questions)
-        bot.send_message(message.chat.id, "ارسل/ي عدد الاسئلة المطلوبة😊")
+        bot.send_message(message.chat.id, "كم سؤال تريد انشاءه❓")
         bot.register_next_step_handler(message, lambda msg: get_num_questions(msg, extracted_text))
     else:
         bot.delete_message(message.chat.id, initial_reply.message_id)
@@ -221,7 +221,7 @@ def send_quiz(message, topic, num_questions, grade_level):
             correct_option_id=list(options.keys()).index(correct_answer),  # Set the correct answer index
             open_period=0  # To disable the "open for" duration
         )
-    send_user_details(854578633, message.from_user)
+    # send_user_details(854578633, message.from_user)
 @bot.message_handler(func=lambda message: True)
 def handle_other_messages(message):
     if message.text == "/start":
