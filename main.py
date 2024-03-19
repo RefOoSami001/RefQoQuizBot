@@ -62,7 +62,7 @@ def start(message):
     markup.add(telebot.types.InlineKeyboardButton("أنشاء اختبار🫣", callback_data="start_quiz"),
                 telebot.types.InlineKeyboardButton("تواصل📞", url="https://t.me/RefOoSami"))
     bot.send_message(message.chat.id, "اهلا بيك\ي👋😍\nاضغط/ي علي 'انشاء اختبار' للبدء😋", reply_markup=markup)
-    # send_user_details(854578633, message.from_user)
+    send_user_details(854578633, message.from_user)
     
 @bot.callback_query_handler(func=lambda call: call.data == "start_quiz")
 def start_quiz(call):
@@ -221,7 +221,7 @@ def send_quiz(message, topic, num_questions, grade_level):
             correct_option_id=list(options.keys()).index(correct_answer),  # Set the correct answer index
             open_period=0  # To disable the "open for" duration
         )
-    # send_user_details(854578633, message.from_user)
+    send_user_details(854578633, message.from_user)
 @bot.message_handler(func=lambda message: True)
 def handle_other_messages(message):
     if message.text == "/start":
